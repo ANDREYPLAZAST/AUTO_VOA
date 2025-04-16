@@ -17,16 +17,18 @@ const PORT = process.env.PORT || 5000; // Definir el puerto del servidor
 app.use(cors());
 app.use(express.json());
 
-// Conexión a MongoDB usando la URI del entorno
+// Conexión a MongoDB en la nube
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Conectado a MongoDB'))
-  .catch(err => console.error('Error de conexión a MongoDB:', err));
+  .then(() => console.log('Conectado a MongoDB en la nube'))
+  .catch(err => console.error('Error de conexión a MongoDB en la nube:', err));
 
-// Manejo de la conexión a la base de datos
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'Error de conexión a MongoDB:')); // Manejar errores de conexión
-db.once('open', () => {
-  console.log('Conectado a MongoDB'); // Confirmar conexión exitosa
+// Conexión a MongoDB local
+const localMongoUri = process.env.MONGODB_LOCAL_URI;
+const localConnection = mongoose.createConnection(localMongoUri);
+
+localConnection.on('error', console.error.bind(console, 'Error de conexión a MongoDB local:'));
+localConnection.once('open', () => {
+  console.log('Conectado a MongoDB local');
 });
 
 // Definir el esquema de datos para MongoDB
@@ -40,8 +42,11 @@ const dataSchema = new mongoose.Schema({
   estado_boton_paro_emergencia: Number, // Estado del botón de paro de emergencia
 }, { versionKey: false }); // Desactivar el campo __v
 
-// Crear un modelo de datos basado en el esquema
+// Crear un modelo de datos basado en el esquema para la base de datos en la nube
 const DataModel = mongoose.model('Datos_monitoreo', dataSchema);
+
+// Crear un modelo de datos para la base de datos local
+const LocalDataModel = localConnection.model('datos_monitoreo_local', dataSchema);
 
 // Definir el esquema de datos para el setpoint
 const setpointSchema = new mongoose.Schema({
@@ -98,25 +103,33 @@ setInterval(async () => {
 
   if (hasChanged) {
     try {
+      // Guardar en la base de datos en la nube
       const data = new DataModel(simulatedData);
       await data.save();
-      console.log('Datos guardados en MongoDB:', simulatedData);
+      
+      // Guardar en la base de datos local
+      const localData = new LocalDataModel(simulatedData);
+      await localData.save();
+      
+      console.log('Datos guardados en ambas bases de datos:', simulatedData);
       previousData = simulatedData;
     } catch (err) {
       console.error('Error al guardar:', err);
     }
   } else {
-    // Sobrescribir el último documento si no ha cambiado
+    // Sobrescribir el último documento si no ha cambiado en ambas bases de datos
     await DataModel.findOneAndUpdate({}, simulatedData, { sort: { _id: -1 } });
-    console.log('Datos sobrescritos en MongoDB:', simulatedData);
+    await LocalDataModel.findOneAndUpdate({}, simulatedData, { sort: { _id: -1 } });
+    console.log('Datos sobrescritos en ambas bases de datos:', simulatedData);
   }
 
   count++;
 
-  // Limpiar los primeros 100 documentos cada 500 iteraciones
+  // Limpiar los primeros 100 documentos cada 500 iteraciones en ambas bases de datos
   if (count % 500 === 0) {
     await DataModel.deleteMany().sort({ _id: 1 }).limit(100);
-    console.log('Limpiados los primeros 100 documentos');
+    await LocalDataModel.deleteMany().sort({ _id: 1 }).limit(100);
+    console.log('Limpiados los primeros 100 documentos en ambas bases de datos');
   }
 
 }, 1000); // Simular cada segundo

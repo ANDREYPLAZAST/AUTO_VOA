@@ -25,21 +25,21 @@ app.use(cors()); // Habilita CORS para permitir peticiones desde otros dominios
 app.use(express.json()); // Permite parsear el cuerpo de las peticiones como JSON
 
 // ====================================================
-// CONEXIÓN A MONGODB
+// CONEXIÓN A MONGODB (NUBE Y LOCAL)
 // ====================================================
 
-// Establece la conexión con MongoDB usando la URI del archivo .env
+// Conexión a MongoDB en la nube
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Conectado a MongoDB'))
-  .catch(err => console.error('Error de conexión a MongoDB:', err));
+  .then(() => console.log('Conectado a MongoDB en la nube'))
+  .catch(err => console.error('Error de conexión a MongoDB en la nube:', err));
 
-// Configuración de manejadores de eventos para la conexión a MongoDB
-const db = mongoose.connection;
-// Manejador de errores de conexión
-db.on('error', console.error.bind(console, 'Error de conexión a MongoDB:'));
-// Manejador de conexión exitosa
-db.once('open', () => {
-  console.log('Conexión exitosa a MongoDB');
+// Conexión a MongoDB local
+const localMongoUri = process.env.MONGODB_LOCAL_URI;
+const localConnection = mongoose.createConnection(localMongoUri);
+
+localConnection.on('error', console.error.bind(console, 'Error de conexión a MongoDB local:'));
+localConnection.once('open', () => {
+  console.log('Conectado a MongoDB local');
 });
 
 // ====================================================
@@ -59,8 +59,11 @@ const dataSchema = new mongoose.Schema({
   estado_boton_confirmar: Number // Estado del botón de confirmación (0 = inactivo, 1 = activo)
 }, { versionKey: false }); // Desactiva el campo __v de versionado de documentos
 
-// Crea el modelo para los datos de monitoreo
+// Modelos para la base de datos en la nube
 const DataModel = mongoose.model('Datos_monitoreo', dataSchema);
+
+// Modelos para la base de datos local
+const LocalDataModel = localConnection.model('datos_monitoreo_local', dataSchema);
 
 // Esquema para los setpoints (valores de referencia)
 // Define la estructura de los datos que se guardarán en la colección 'Setpoint'
@@ -72,6 +75,9 @@ const setpointSchema = new mongoose.Schema({
 
 // Crea el modelo para los setpoints
 const SetpointModel = mongoose.model('Setpoint', setpointSchema);
+
+// Modelos para la base de datos local
+const LocalSetpointModel = localConnection.model('setpoint_local', setpointSchema);
 
 // ====================================================
 // FUNCIONES AUXILIARES
@@ -113,20 +119,33 @@ setInterval(() => {
       // Guarda los datos de monitoreo en MongoDB
       const data = new DataModel(dataToSave);
       await data.save();
-      console.log('Datos guardados:', dataToSave);
+      
+      // Guardar en la base de datos local
+      const localData = new LocalDataModel(dataToSave);
+      await localData.save();
+      
+      console.log('Datos guardados en ambas bases de datos:', dataToSave);
 
       // Si el botón de confirmar está activado (valor 1), guarda un nuevo setpoint
       if (plcData.estado_boton_confirmar === 1) {
-        const setpoint = new SetpointModel({
+        const setpointData = {
           hora,
           referencia_nivel_tanque_cm: plcData.referencia_nivel_tanque_cm,
           origen: 'PLC' // Indica que el setpoint viene del PLC
-        });
+        };
+
+        // Guardar setpoint en la nube
+        const setpoint = new SetpointModel(setpointData);
         await setpoint.save();
-        console.log('Setpoint guardado:', setpoint);
+
+        // Guardar setpoint en local
+        const localSetpoint = new LocalSetpointModel(setpointData);
+        await localSetpoint.save();
+
+        console.log('Setpoint guardado en ambas bases de datos:', setpointData);
       }
     } catch (err) {
-      console.error('Error al guardar en MongoDB:', err);
+      console.error('Error al guardar en las bases de datos:', err);
     }
 
   }).catch((err) => {
@@ -143,7 +162,11 @@ app.get('/api/data', async (req, res) => {
   try {
     // Busca el documento más reciente en la colección de datos
     const latestData = await DataModel.findOne().sort({ _id: -1 });
-    res.json(latestData);
+    const latestLocalData = await LocalDataModel.findOne().sort({ _id: -1 });
+    res.json({
+      cloud: latestData,
+      local: latestLocalData
+    });
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener los datos' });
   }
@@ -154,7 +177,11 @@ app.get('/api/setpoint', async (req, res) => {
   try {
     // Busca el setpoint más reciente
     const latestSetpoint = await SetpointModel.findOne().sort({ _id: -1 });
-    res.json(latestSetpoint);
+    const latestLocalSetpoint = await LocalSetpointModel.findOne().sort({ _id: -1 });
+    res.json({
+      cloud: latestSetpoint,
+      local: latestLocalSetpoint
+    });
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener el setpoint' });
   }
@@ -170,27 +197,34 @@ app.post('/api/setpoint', async (req, res) => {
     const hora = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
 
     // Escribir el nuevo valor en el PLC
-    PythonShell.run('write_plc.py', { args: [referencia_nivel_tanque_cm] }).then((results) => {
+    PythonShell.run('write_plc.py', { args: [referencia_nivel_tanque_cm] }).then(async (results) => {
       const plcResult = JSON.parse(results[0]);
       
       if (!plcResult.success) {
         throw new Error(`Error al escribir en el PLC: ${plcResult.error}`);
       }
 
-      // Crea un nuevo documento de setpoint
-      const newSetpoint = new SetpointModel({
+      const setpointData = {
         hora,
         referencia_nivel_tanque_cm,
         origen: 'frontend' // Indica que el setpoint viene del frontend
-      });
+      };
 
-      // Guarda el nuevo setpoint en la base de datos
-      return newSetpoint.save();
-    }).then((savedSetpoint) => {
+      // Guardar en la nube
+      const newSetpoint = new SetpointModel(setpointData);
+      const savedCloudSetpoint = await newSetpoint.save();
+
+      // Guardar en local
+      const newLocalSetpoint = new LocalSetpointModel(setpointData);
+      const savedLocalSetpoint = await newLocalSetpoint.save();
+
       res.json({ 
         success: true, 
-        setpoint: savedSetpoint,
-        plcResult: JSON.parse(results[0])
+        setpoint: {
+          cloud: savedCloudSetpoint,
+          local: savedLocalSetpoint
+        },
+        plcResult: plcResult
       });
     }).catch((error) => {
       throw error;

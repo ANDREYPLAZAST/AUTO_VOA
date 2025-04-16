@@ -1,7 +1,6 @@
 // ====================================================
 // CONFIGURACIÓN INICIAL Y DEPENDENCIAS
-// ====================================================
-
+// ===================================================
 // Carga las variables de entorno desde el archivo .env
 // Esto permite usar variables como MONGODB_URI y PORT de forma segura
 require('dotenv').config();
@@ -170,18 +169,39 @@ app.post('/api/setpoint', async (req, res) => {
     // Obtiene la hora actual en formato de Bogotá
     const hora = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
 
-    // Crea un nuevo documento de setpoint
-    const newSetpoint = new SetpointModel({
-      hora,
-      referencia_nivel_tanque_cm,
-      origen: 'frontend' // Indica que el setpoint viene del frontend
+    // Escribir el nuevo valor en el PLC
+    PythonShell.run('write_plc.py', { args: [referencia_nivel_tanque_cm] }).then((results) => {
+      const plcResult = JSON.parse(results[0]);
+      
+      if (!plcResult.success) {
+        throw new Error(`Error al escribir en el PLC: ${plcResult.error}`);
+      }
+
+      // Crea un nuevo documento de setpoint
+      const newSetpoint = new SetpointModel({
+        hora,
+        referencia_nivel_tanque_cm,
+        origen: 'frontend' // Indica que el setpoint viene del frontend
+      });
+
+      // Guarda el nuevo setpoint en la base de datos
+      return newSetpoint.save();
+    }).then((savedSetpoint) => {
+      res.json({ 
+        success: true, 
+        setpoint: savedSetpoint,
+        plcResult: JSON.parse(results[0])
+      });
+    }).catch((error) => {
+      throw error;
     });
 
-    // Guarda el nuevo setpoint en la base de datos
-    await newSetpoint.save();
-    res.json({ success: true, setpoint: newSetpoint });
   } catch (error) {
-    res.status(500).json({ error: 'Error al guardar setpoint' });
+    console.error('Error en el endpoint setpoint:', error);
+    res.status(500).json({ 
+      error: 'Error al guardar setpoint',
+      details: error.message 
+    });
   }
 });
 
