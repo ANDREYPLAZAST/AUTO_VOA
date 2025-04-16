@@ -18,7 +18,7 @@ const DataTable = ({ data }) => {
         borderRadius: 2,
         '& .MuiTableCell-root': {
           borderColor: 'rgba(255, 255, 255, 0.1)',
-          color: 'white',
+      color: 'white',
           padding: '16px',
         }
       }}
