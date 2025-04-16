@@ -42,10 +42,22 @@ const DataModel = mongoose.model('Datos_monitoreo', dataSchema);
 const setpointSchema = new mongoose.Schema({
   hora: String, // Hora de la lectura
   referencia_nivel_tanque_cm: Number, // Referencia del nivel del tanque
+  origen: String, // Para identificar si viene del frontend o Python
 }, { versionKey: false }); // Desactivar el campo __v
 
 // Crear un modelo de datos para el setpoint
 const SetpointModel = mongoose.model('Setpoint', setpointSchema);
+
+// Función para obtener el último setpoint
+async function getLatestSetpoint() {
+  try {
+    const latestSetpoint = await SetpointModel.findOne().sort({ _id: -1 });
+    return latestSetpoint ? latestSetpoint.referencia_nivel_tanque_cm : 100; // valor por defecto 100
+  } catch (error) {
+    console.error('Error al obtener el último setpoint:', error);
+    return 100; // valor por defecto en caso de error
+  }
+}
 
 // Simular datos y almacenarlos en MongoDB
 let previousData = {};
@@ -56,7 +68,6 @@ let randomData = [];
 for (let i = 0; i < 10; i++) {
   randomData.push({
     hora: new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' }),
-    referencia_nivel_tanque_cm: 100,
     nivel_actual_tanque_cm: Math.floor(Math.random() * 100),
     rpms_bomba: Math.floor(Math.random() * 500),
     estado_boton_start: Math.round(Math.random()),
@@ -66,10 +77,16 @@ for (let i = 0; i < 10; i++) {
 }
 
 setInterval(async () => {
-  // Usar datos aleatorios para las primeras 10 iteraciones, luego repetir
-  const simulatedData = count < 10 ? randomData[count] : { ...randomData[9], hora: new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' }) };
+  const currentSetpoint = await getLatestSetpoint();
+  
+  const simulatedData = count < 10 ? 
+    { ...randomData[count], referencia_nivel_tanque_cm: currentSetpoint } : 
+    { 
+      ...randomData[9], 
+      hora: new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' }),
+      referencia_nivel_tanque_cm: currentSetpoint
+    };
 
-  // Verificar si los datos han cambiado (excepto la hora)
   const hasChanged = Object.keys(simulatedData).some(
     key => key !== 'hora' && simulatedData[key] !== previousData[key]
   );
@@ -89,24 +106,17 @@ setInterval(async () => {
     console.log('Datos sobrescritos en MongoDB:', simulatedData);
   }
 
-  // Almacenar el setpoint si cambia
-  const setpointData = {
-    hora: simulatedData.hora,
-    referencia_nivel_tanque_cm: simulatedData.referencia_nivel_tanque_cm,
-  };
-  await SetpointModel.findOneAndUpdate({}, setpointData, { upsert: true, sort: { _id: -1 } });
-
   count++;
 
   // Limpiar los primeros 100 documentos cada 500 iteraciones
   if (count % 500 === 0) {
     await DataModel.deleteMany().sort({ _id: 1 }).limit(100);
-    await SetpointModel.deleteMany().sort({ _id: 1 }).limit(100);
     console.log('Limpiados los primeros 100 documentos');
   }
 
 }, 1000); // Simular cada segundo
 
+// Endpoint para obtener los últimos datos
 app.get('/api/data', async (req, res) => {
   try {
     const latestData = await DataModel.findOne().sort({ _id: -1 });
@@ -116,10 +126,32 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
-app.post('/api/setpoint', (req, res) => {
-  const { referencia_nivel_tanque_cm } = req.body;
-  // Actualiza el setpoint en la base de datos o en memoria
-  res.json({ success: true });
+// Endpoint para actualizar el setpoint desde el frontend
+app.post('/api/setpoint', async (req, res) => {
+  try {
+    const { referencia_nivel_tanque_cm } = req.body;
+    
+    const newSetpoint = new SetpointModel({
+      hora: new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' }),
+      referencia_nivel_tanque_cm: referencia_nivel_tanque_cm,
+      origen: 'frontend'
+    });
+    
+    await newSetpoint.save();
+    res.json({ success: true, setpoint: newSetpoint });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar el setpoint' });
+  }
+});
+
+// Endpoint para obtener el último setpoint
+app.get('/api/setpoint', async (req, res) => {
+  try {
+    const latestSetpoint = await SetpointModel.findOne().sort({ _id: -1 });
+    res.json(latestSetpoint);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener el setpoint' });
+  }
 });
 
 // Iniciar el servidor y escuchar en el puerto especificado
