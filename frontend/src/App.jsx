@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import EstadoBotones from './components/EstadoBotones';
 import NivelTanque from './components/NivelTanque';
 import DataTable from './components/DataTable';
 import SetpointControl from './components/SetpointControl';
-import { CircularProgress, Alert, Snackbar, Container, Box } from '@mui/material';
+import BotonesControl from './components/BotonesControl';
+import { CircularProgress, Alert, Snackbar, Box } from '@mui/material';
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -33,7 +33,7 @@ function App() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 1000);
+    const interval = setInterval(fetchData, 1);
     return () => clearInterval(interval);
   }, []);
 
@@ -41,7 +41,7 @@ function App() {
     <Box
       sx={{
         minHeight: '100vh',
-        minWidth: '100vw',
+        width: '100vw',
         display: 'flex',
         flexDirection: 'column',
         bgcolor: '#1a1a1a',
@@ -49,113 +49,83 @@ function App() {
         overflow: 'hidden'
       }}
     >
-      <Container 
-        maxWidth={false}
-        disableGutters
-        sx={{ 
+      <Box
+        sx={{
           flex: 1,
-          py: 4,
-          px: { xs: 2, md: 4 },
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          maxWidth: '1600px',
+          mx: 'auto',
+          px: 4,
+          py: 4
         }}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 4,
-            width: '100%',
-          }}
-        >
-          <h1 style={{
-            textAlign: 'center',
-            fontSize: '2.5rem',
-            margin: 0,
-            marginBottom: '2rem',
-            color: 'white',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
-          }}>
-            Sistema de Supervisión Tanque
-          </h1>
+        <h1 style={{
+          textAlign: 'center',
+          fontSize: '2.5rem',
+          margin: '0 0 3rem 0',
+          color: 'white',
+          textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+        }}>
+          Sistema de Supervisión Tanque
+        </h1>
 
-          <Box sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            gap: 8,
-            width: '100%',
-            justifyContent: 'space-evenly',
-            alignItems: 'center',
-          }}>
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              width: { xs: '100%', md: '45%' },
-              maxWidth: '500px'
-            }}>
-              <SetpointControl />
-              <EstadoBotones
-                start={data?.estado_boton_start}
-                stop={data?.estado_boton_stop}
-                paroEmergencia={data?.estado_boton_paro_emergencia}
-              />
-            </Box>
-
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              width: { xs: '100%', md: '45%' },
-              maxWidth: '500px'
-            }}>
-              <NivelTanque nivel={data?.nivel_actual_tanque_cm} />
-            </Box>
-          </Box>
-
-          {loading && (
+        {/* Tabla de Datos */}
+        <Box sx={{ 
+          width: '100%',
+          bgcolor: 'rgba(32, 32, 32, 0.95)',
+          borderRadius: 1,
+          overflow: 'auto',
+          mb: 6
+        }}>
+          {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
               <CircularProgress sx={{ color: 'white' }} />
             </Box>
-          )}
-
-          {error && (
-            <Alert severity="error" sx={{ width: '100%' }}>
-              {error}
-            </Alert>
-          )}
-
-          {!loading && !error && data && (
-            <Box sx={{ 
-              width: '100%',
-              mt: 6,
-              px: { xs: 0, sm: 2, md: 4 },
-              overflow: 'auto',
-              '&::-webkit-scrollbar': {
-                width: '8px',
-                height: '8px',
-              },
-              '&::-webkit-scrollbar-track': {
-                background: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '4px',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: '4px',
-                '&:hover': {
-                  background: 'rgba(255, 255, 255, 0.3)',
-                },
-              },
-            }}>
-              <DataTable data={data} />
-            </Box>
-          )}
+          ) : !error && data ? (
+            <DataTable data={data} />
+          ) : null}
         </Box>
-      </Container>
+
+        {/* Panel Principal */}
+        <Box sx={{ 
+          width: '100%',
+          display: 'flex',
+          gap: 8,
+          justifyContent: 'center',
+          alignItems: 'center',
+          mb: 4
+        }}>
+          {/* Panel Izquierdo - Setpoint */}
+          <Box sx={{ 
+            width: '400px',
+            bgcolor: 'rgba(32, 32, 32, 0.95)',
+            borderRadius: 2,
+            p: 4
+          }}>
+            <SetpointControl />
+          </Box>
+
+          {/* Panel Central - Botones y Tanque */}
+          <Box sx={{ 
+            flex: '0 1 800px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Box sx={{ width: '100%', mb: 8 }}>
+              <BotonesControl />
+            </Box>
+            <Box sx={{ transform: 'scale(1.4)' }}>
+              <NivelTanque nivel={data?.nivel_actual_tanque_cm} />
+            </Box>
+          </Box>
+        </Box>
+      </Box>
 
       <Snackbar
         open={!!error}
