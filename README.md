@@ -1,9 +1,6 @@
-# Sistema de Supervisión Tanque
-
-Sistema de monitoreo y control para tanque de agua con interfaz web en tiempo real.
+# Sistema de Monitoreo y Control de Procesos
 
 ## Estructura del Proyecto
-
 ```
 AUTO_VOA/
 │
@@ -26,108 +23,90 @@ AUTO_VOA/
 └── update_setpoint.py           # Script Python para setpoint
 ```
 
-## Tecnologías Utilizadas
+## Descripción General
+Sistema de monitoreo y control en tiempo real que integra un PLC con una interfaz web, permitiendo la visualización y control de un proceso industrial.
 
-### Backend
-- **Node.js + Express**: Servidor web moderno y rápido
-- **MongoDB**: Base de datos para almacenar datos históricos y configuraciones
-- **Mongoose**: Para modelado de datos y conexión con MongoDB
-- **API RESTful**: Endpoints para datos y control
-  - GET /api/data: Obtiene datos actuales
-  - POST /api/setpoint: Actualiza setpoint
-  - GET /api/setpoint: Consulta setpoint
-  - POST /api/control: Control de bomba
+## Características Principales
 
-### Frontend
-- **React 18**: Biblioteca UI moderna y reactiva
-- **Vite**: Bundler y servidor de desarrollo ultrarrápido
-- **Material-UI**: Componentes visuales profesionales
-- **Fetch API**: Para comunicación con el backend
+### 1. Monitoreo en Tiempo Real
+- Lectura constante del PLC cada 100ms
+- Variables monitoreadas:
+  - Nivel de referencia del tanque
+  - Nivel actual del tanque
+  - RPMs de la bomba
+  - Estados de los botones
 
-## Configuración del Proyecto
+### 2. Gestión Inteligente de Datos
+- Almacenamiento optimizado:
+  - Solo guarda cambios significativos
+  - Actualiza el último registro si no hay cambios
+  - Mantiene historial de eventos importantes
 
-### Backend
-```bash
-cd backend
-npm install
-# Crear archivo .env con MONGODB_URI
-npm start
-```
+### 3. Control de Setpoints
+- Dos orígenes de setpoints:
+  - PLC: cuando se activa el botón de confirmar
+  - Frontend: a través de la interfaz web
+- Registro de hora y origen de cada setpoint
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 4. Control de Botones
+- Monitoreo de estados:
+  - Start
+  - Stop
+  - Paro de Emergencia
+- Escritura inmediata al PLC
+- Historial de cambios
 
-### Script Python
-```bash
-pip install -r requirements.txt
-python update_setpoint.py [valor]
-```
+### 5. Estructura de Base de Datos
+Colecciones en MongoDB:
+1. Datos_monitoreo
+   - Lecturas del PLC
+   - Historial de cambios
+2. Setpoint
+   - Valores de referencia
+   - Origen de cada setpoint
+3. Estados_botones
+   - Historial de estados
+   - Registro de cambios
 
-## Variables de Entorno
+### 6. Optimizaciones
+- Lectura eficiente (100ms)
+- Almacenamiento selectivo
+- Comunicación bidireccional
+- Minimización de datos duplicados
 
-### Backend (.env)
-```env
-MONGODB_URI=mongodb+srv://usuario:contraseña@cluster.mongodb.net/basedatos
-PORT=5000
-```
-
-### Frontend
-- `VITE_API_URL`: URL del backend (por defecto: http://localhost:5000)
-
-## Componentes Principales
-
-### DataTable
-- Muestra datos en tiempo real
-- Actualización automática cada segundo
-- Visualización de nivel, RPM y estado
-
-### NivelTanque
-- Representación visual del tanque
-- Marcadores de nivel cada 10%
-- Animaciones suaves de cambio
-
-### EstadoBotones
-- Control START/STOP del sistema
-- Botón de emergencia
-- Estados visuales (ON/OFF/EMERGENCY)
-
-### SetpointControl
-- Slider para ajuste de nivel (0-100)
-- Validación de rango
-- Botón de confirmación
-
-## Características del Sistema
-
-### Monitoreo en Tiempo Real
-- Nivel del tanque
-- RPMs de la bomba
-- Estados de botones
-- Setpoint actual
-
-### Control de Sistema
-- Ajuste de setpoint (0-100 cm)
-- Control de bomba (Start/Stop)
-- Paro de emergencia
-- Validación de datos
-
-### Interfaz de Usuario
-- Diseño responsivo
-- Tema oscuro
-- Feedback visual
-- Actualizaciones en tiempo real
-
-### Seguridad y Validación
-- Validación de datos
+### 7. Seguridad y Robustez
 - Manejo de errores
-- Límites de valores
-- Protección contra valores inválidos
+- Verificación de conexiones
+- Validación de datos
+- Sistema de respaldo
 
-### Script Python
-- Herramienta CLI para setpoint
-- Validación de valores
-- Manejo de errores
-- Uso: `python update_setpoint.py [valor]`
+## Requisitos
+- Node.js
+- MongoDB
+- Python 3.x
+- snap7 (para comunicación con PLC)
+
+## Instalación
+1. Clonar el repositorio
+2. Instalar dependencias:
+   ```bash
+   npm install
+   pip install -r requirements.txt
+   ```
+3. Configurar variables de entorno (.env)
+4. Iniciar el servidor:
+   ```bash
+   node backend/server.js
+   ```
+
+## Uso
+1. Acceder a la interfaz web
+2. Monitorear variables en tiempo real
+3. Controlar setpoints y botones
+4. Ver historial de cambios
+
+## Mantenimiento
+- Monitorear logs del servidor
+- Verificar conexión con PLC
+- Revisar espacio en base de datos
+- Actualizar dependencias periódicamente
